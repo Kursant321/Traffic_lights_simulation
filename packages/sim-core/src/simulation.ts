@@ -11,6 +11,7 @@ import { computeTurn } from "@tls/shared-types";
 
 type Lane = "left" | "through" | "right";
 type GreenPhaseId = "NS_THROUGH" | "EW_THROUGH" | "NS_LEFT" | "EW_LEFT";
+export type ControllerMode = "fixed" | "adaptive";
 
 type Stage =
   | { kind: "GREEN"; phase: GreenPhaseId }
@@ -22,23 +23,50 @@ interface Vehicle {
   startRoad: Road;
   endRoad: Road;
   turn: Turn;
-  seq: number; // pilnuję stabilnego porządku w leftVehicles
+  seq: number;
+  arrivalStep: number;
 }
 
-interface SimulationConfig {
+export interface SimulationConfig {
+  // Shared
+  mode: ControllerMode;
   throughputPerLanePerStep: number;
-  greenStepsPerPhase: number;
   yellowSteps: number;
   allRedSteps: number;
   skipPhasesWithZeroDemand: boolean;
+
+  // Fixed-cycle
+  greenStepsPerPhase: number;
+
+  // Adaptive
+  minGreenSteps: number;
+  maxGreenSteps: number;
+  pressureWeights: { queue: number; wait: number };
+  switchHysteresis: number; // np. 1.1 oznacza: przełącz dopiero gdy best >= current*1.1
+  starvationThresholdSteps: number;
+  starvationBonus: number; // duży bonus do score, gdy max wait przekroczy threshold
 }
 
 const DEFAULT_CONFIG: SimulationConfig = {
+  mode: "fixed",
   throughputPerLanePerStep: 1,
+
+  // Fixed defaults (pasują do przykładu z treści)
   greenStepsPerPhase: 2,
+
+  // Safety buffers (domyślnie 0, żeby nie dodawać pustych kroków)
   yellowSteps: 0,
   allRedSteps: 0,
-  skipPhasesWithZeroDemand: true
+
+  skipPhasesWithZeroDemand: true,
+
+  // Adaptive defaults (używane tylko gdy mode="adaptive")
+  minGreenSteps: 1,
+  maxGreenSteps: 10,
+  pressureWeights: { queue: 1.0, wait: 0.05 },
+  switchHysteresis: 1.1,
+  starvationThresholdSteps: 30,
+  starvationBonus: 1_000_000
 };
 
 function laneForTurn(turn: Turn): Lane {
@@ -81,6 +109,17 @@ class ApproachQueues {
       for (const lane of lanes) sum += this.size(road, lane);
     }
     return sum;
+  }
+
+  public listVehiclesForPhase(phase: GreenPhaseId): Vehicle[] {
+    const allowed = allowedMovementsForPhase(phase);
+    const out: Vehicle[] = [];
+    for (const { road, lanes } of allowed) {
+      for (const lane of lanes) {
+        out.push(...this.q[road][lane]);
+      }
+    }
+    return out;
   }
 }
 
@@ -127,6 +166,7 @@ export class Simulation {
   private greenAgeSteps = 0;
 
   private nextVehicleSeq = 1;
+  private currentStep = 0;
 
   public constructor(cfg?: Partial<SimulationConfig>) {
     this.cfg = { ...DEFAULT_CONFIG, ...(cfg ?? {}) };
@@ -143,7 +183,8 @@ export class Simulation {
       startRoad: cmd.startRoad,
       endRoad: cmd.endRoad,
       turn,
-      seq: this.nextVehicleSeq++
+      seq: this.nextVehicleSeq++,
+      arrivalStep: this.currentStep
     };
 
     this.seenVehicleIds.add(v.id);
@@ -151,7 +192,7 @@ export class Simulation {
   }
 
   public step(): StepStatus {
-    // Jeśli jestem w YELLOW / ALL_RED, to tylko odliczam i nie przepuszczam aut.
+    // YELLOW / ALL_RED: tylko odliczanie, bez przepuszczania pojazdów
     if (this.stage.kind !== "GREEN") {
       this.stage.remainingSteps -= 1;
 
@@ -168,56 +209,130 @@ export class Simulation {
         }
       }
 
+      this.currentStep += 1;
       return { leftVehicles: [] };
     }
 
-    // --- GAP-OUT: jeżeli moja faza ma 0 aut, a jakaś inna ma popyt, to przełączam się od razu.
-    // Dzięki temu przykład z polecenia działa naturalnie.
-    const currentDemand = this.queues.demandForPhase(this.stage.phase);
-    if (currentDemand === 0) {
-      const next = this.pickNextPhase(this.stage.phase);
-      if (next !== this.stage.phase) {
-        this.switchTo(next);
-      }
-    }
+    // Decyzja o fazie (fixed/adaptive) jest podejmowana przed rozładowaniem kolejek.
+    this.maybeSwitchPhaseBeforeDischarge();
 
-    // Po ewentualnym switchu nadal mogę być w GREEN albo wejść w YELLOW/ALL_RED.
+    // Jeśli switch włączył YELLOW/ALL_RED, w tym kroku nic nie przejeżdża
     if (this.stage.kind !== "GREEN") {
+      this.currentStep += 1;
       return { leftVehicles: [] };
     }
 
-    // GREEN: przepuszczam auta zgodnie z fazą.
-    const left = this.dischargeVehicles(this.stage.phase);
+    const discharged = this.dischargeVehicles(this.stage.phase);
 
-    // Zwiększam czas trwania zielonego.
+    // Stabilny porządek: rosnąco wg kolejności dodania
+    discharged.sort((a, b) => a.seq - b.seq);
+
     this.greenAgeSteps += 1;
 
-    // Jeżeli czas zielonego się skończył → przełączam na kolejną fazę.
-    if (this.greenAgeSteps >= this.cfg.greenStepsPerPhase) {
-      const next = this.pickNextPhase(this.stage.phase);
-      if (next !== this.stage.phase) {
-        this.switchTo(next);
-      } else {
-        this.greenAgeSteps = 0;
+    // Zakończenie kroku
+    this.currentStep += 1;
+
+    return { leftVehicles: discharged.map((v) => v.id) };
+  }
+
+  private maybeSwitchPhaseBeforeDischarge(): void {
+    if (this.stage.kind !== "GREEN") return;
+
+    const current = this.stage.phase;
+    const currentDemand = this.queues.demandForPhase(current);
+
+    // Gap-out: gdy brak popytu na aktualnej fazie, można przełączyć natychmiast
+    if (currentDemand === 0) {
+      const next = this.pickNextPhase(current);
+      if (next !== current) this.switchTo(next);
+      return;
+    }
+
+    if (this.cfg.mode === "fixed") {
+      // Fixed-cycle: przełącza po greenStepsPerPhase
+      if (this.greenAgeSteps >= this.cfg.greenStepsPerPhase) {
+        const next = this.pickNextPhase(current);
+        if (next !== current) this.switchTo(next);
+        else this.greenAgeSteps = 0;
+      }
+      return;
+    }
+
+    // Adaptive
+    if (this.greenAgeSteps < this.cfg.minGreenSteps) return;
+
+    const scoreCurrent = this.phaseScore(current);
+    const best = this.bestPhaseByScore(current);
+
+    if (best === current) {
+      if (this.greenAgeSteps >= this.cfg.maxGreenSteps) this.greenAgeSteps = 0;
+      return;
+    }
+
+    const scoreBest = this.phaseScore(best);
+
+    // Starvation: jeśli best ma bardzo długo czekające pojazdy, score dostaje bonus i przełączenie następuje naturalnie
+    const shouldSwitchByPressure = scoreBest >= scoreCurrent * this.cfg.switchHysteresis;
+    const shouldSwitchByMaxGreen =
+      this.greenAgeSteps >= this.cfg.maxGreenSteps &&
+      this.queues.demandForPhase(best) > 0;
+
+    if (shouldSwitchByPressure || shouldSwitchByMaxGreen) {
+      this.switchTo(best);
+    }
+  }
+
+  private phaseScore(phase: GreenPhaseId): number {
+    const vehicles = this.queues.listVehiclesForPhase(phase);
+    if (vehicles.length === 0) return 0;
+
+    const queueSum = vehicles.length;
+
+    let waitSum = 0;
+    let maxWait = 0;
+
+    for (const v of vehicles) {
+      const w = this.currentStep - v.arrivalStep;
+      waitSum += w;
+      if (w > maxWait) maxWait = w;
+    }
+
+    let score =
+      this.cfg.pressureWeights.queue * queueSum + this.cfg.pressureWeights.wait * waitSum;
+
+    if (maxWait >= this.cfg.starvationThresholdSteps) {
+      score += this.cfg.starvationBonus;
+    }
+
+    return score;
+  }
+
+  private bestPhaseByScore(current: GreenPhaseId): GreenPhaseId {
+    let best = current;
+    let bestScore = this.phaseScore(best);
+
+    for (const phase of FIXED_CYCLE) {
+      const s = this.phaseScore(phase);
+      if (s > bestScore) {
+        best = phase;
+        bestScore = s;
       }
     }
 
-    // Stabilny porządek leftVehicles: sortuję po kolejności dodania.
-    left.sort((a, b) => a.seq - b.seq);
-
-    return { leftVehicles: left.map((v) => v.id) };
+    return best;
   }
 
   private dischargeVehicles(phase: GreenPhaseId): Vehicle[] {
     const allowed = allowedMovementsForPhase(phase);
-
     const discharged: Vehicle[] = [];
+
     for (const { road, lanes } of allowed) {
       for (const lane of lanes) {
         const popped = this.queues.popMany(road, lane, this.cfg.throughputPerLanePerStep);
         discharged.push(...popped);
       }
     }
+
     return discharged;
   }
 
