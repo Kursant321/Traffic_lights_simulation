@@ -1,8 +1,6 @@
 import { z } from "zod";
 
-// =========================
-//  Domain enums / types
-// =========================
+
 
 export const RoadSchema = z.enum(["north", "south", "east", "west"]);
 export type Road = z.infer<typeof RoadSchema>;
@@ -12,9 +10,7 @@ export type Turn = z.infer<typeof TurnSchema>;
 
 export type VehicleId = string;
 
-// =========================
-//  Commands (input JSON)
-// =========================
+
 
 export const AddVehicleCommandSchema = z.object({
   type: z.literal("addVehicle"),
@@ -40,9 +36,7 @@ export const SimulationInputSchema = z.object({
 });
 export type SimulationInput = z.infer<typeof SimulationInputSchema>;
 
-// =========================
-//  Output JSON (required format)
-// =========================
+
 
 export const StepStatusSchema = z.object({
   leftVehicles: z.array(z.string())
@@ -54,9 +48,7 @@ export const SimulationOutputSchema = z.object({
 });
 export type SimulationOutput = z.infer<typeof SimulationOutputSchema>;
 
-// =========================
-//  Helpers
-// =========================
+
 
 const dirIndex: Record<Road, number> = {
   north: 0,

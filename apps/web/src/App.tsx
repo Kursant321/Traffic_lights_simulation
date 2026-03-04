@@ -275,9 +275,7 @@ export function App(): JSX.Element {
               </div>
             </>
           ) : (
-            <div className="small">
-              Enable diagnostics and run the simulation to use replay.
-            </div>
+            <div className="small">Enable diagnostics and run the simulation to use replay.</div>
           )}
         </div>
 
@@ -307,13 +305,10 @@ export function App(): JSX.Element {
           )}
         </div>
 
-        <div className="card" style={{ gridColumn: "1 / -1" }}>
-          <div className="row">
-            <b>Raw response</b>
-            <span className="small">Full JSON returned by API</span>
-          </div>
+        <details className="card" style={{ gridColumn: "1 / -1" }}>
+          <summary style={{ cursor: "pointer" }}>Advanced: raw API response</summary>
           <pre>{rawResponse || "—"}</pre>
-        </div>
+        </details>
       </div>
     </div>
   );
