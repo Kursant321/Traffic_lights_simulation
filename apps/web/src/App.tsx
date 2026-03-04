@@ -275,7 +275,9 @@ export function App(): JSX.Element {
               </div>
             </>
           ) : (
-            <div className="small">Enable diagnostics and run the simulation to use replay.</div>
+            <div className="small">
+              Enable diagnostics and run the simulation to use replay.
+            </div>
           )}
         </div>
 

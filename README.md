@@ -81,7 +81,12 @@ Example:
 ```json
 {
   "commands": [
-    { "type": "addVehicle", "vehicleId": "vehicle1", "startRoad": "south", "endRoad": "north" },
+    {
+      "type": "addVehicle",
+      "vehicleId": "vehicle1",
+      "startRoad": "south",
+      "endRoad": "north"
+    },
     { "type": "step" }
   ]
 }
@@ -93,9 +98,7 @@ The CLI and the API (without diagnostics) return the required output format:
 
 ```json
 {
-  "stepStatuses": [
-    { "leftVehicles": ["vehicle1"] }
-  ]
+  "stepStatuses": [{ "leftVehicles": ["vehicle1"] }]
 }
 ```
 
@@ -110,7 +113,7 @@ The CLI and the API (without diagnostics) return the required output format:
 
 Each approach has three logical lane queues:
 
-- `left`  (left turns)
+- `left` (left turns)
 - `through` (straight)
 - `right` (right turns)
 
@@ -151,9 +154,9 @@ This phase design prevents conflicting greens by construction.
 
 For a single `step`:
 
-1) the controller decides whether to keep the current phase or switch (subject to controller rules)  
-2) if the current stage is `GREEN`, vehicles are discharged from allowed lane queues  
-3) the step returns `leftVehicles[]`
+1. the controller decides whether to keep the current phase or switch (subject to controller rules)
+2. if the current stage is `GREEN`, vehicles are discharged from allowed lane queues
+3. the step returns `leftVehicles[]`
 
 If the current stage is `YELLOW` or `ALL_RED`, **no vehicles are discharged** in that step.
 
@@ -230,36 +233,44 @@ The web UI uses diagnostics for replay and visualization.
 ## How to run
 
 ### Install
+
 ```bash
 npm install
 ```
 
 ### Quality gate (format + lint + build + test)
+
 ```bash
 npm run check
 ```
 
 ### CLI (single command: input → output)
+
 ```bash
 npm run sim -- input.json output.json
 ```
 
 Realistic switching enabled:
+
 ```bash
 npm run sim:realistic -- input.json output.json
 ```
 
 ### API
+
 Terminal:
+
 ```bash
 npm run dev:api
 ```
 
 Endpoints:
+
 - `GET /health`
 - `POST /simulate`
 
 Examples:
+
 ```bash
 curl -s http://localhost:3000/health
 
@@ -269,12 +280,14 @@ curl -s -X POST "http://localhost:3000/simulate" \
 ```
 
 Parameters:
+
 - `mode=fixed|adaptive`
 - `diagnostics=1`
 - `yellowSteps=<int>`
 - `allRedSteps=<int>`
 
 Example (adaptive + diagnostics + realistic):
+
 ```bash
 curl -s -X POST "http://localhost:3000/simulate?mode=adaptive&diagnostics=1&yellowSteps=1&allRedSteps=1" \
   -H "content-type: application/json" \
@@ -282,19 +295,23 @@ curl -s -X POST "http://localhost:3000/simulate?mode=adaptive&diagnostics=1&yell
 ```
 
 ### Web UI
+
 Run API + Web in two terminals:
 
 Terminal 1:
+
 ```bash
 npm run dev:api
 ```
 
 Terminal 2:
+
 ```bash
 npm run dev:web
 ```
 
 Open:
+
 - http://localhost:5173
 
 ---
@@ -308,6 +325,7 @@ npm run bench -- --steps 400 --seed 7 --p 0.25
 ```
 
 Options:
+
 - `--steps <int>` number of steps
 - `--seed <int>` RNG seed
 - `--p <0..1>` arrival probability per road per step
@@ -322,6 +340,7 @@ npm run test
 ```
 
 Test coverage includes:
+
 - required output format and reference scenario behavior
 - adaptive behavior in high-demand situations
 - diagnostics wrapper consistency

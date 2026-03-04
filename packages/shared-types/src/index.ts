@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-
-
 export const RoadSchema = z.enum(["north", "south", "east", "west"]);
 export type Road = z.infer<typeof RoadSchema>;
 
@@ -9,8 +7,6 @@ export const TurnSchema = z.enum(["right", "straight", "left"]);
 export type Turn = z.infer<typeof TurnSchema>;
 
 export type VehicleId = string;
-
-
 
 export const AddVehicleCommandSchema = z.object({
   type: z.literal("addVehicle"),
@@ -36,8 +32,6 @@ export const SimulationInputSchema = z.object({
 });
 export type SimulationInput = z.infer<typeof SimulationInputSchema>;
 
-
-
 export const StepStatusSchema = z.object({
   leftVehicles: z.array(z.string())
 });
@@ -47,8 +41,6 @@ export const SimulationOutputSchema = z.object({
   stepStatuses: z.array(StepStatusSchema)
 });
 export type SimulationOutput = z.infer<typeof SimulationOutputSchema>;
-
-
 
 const dirIndex: Record<Road, number> = {
   north: 0,
