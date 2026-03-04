@@ -76,8 +76,26 @@ const roads: readonly Road[] = ["north", "east", "south", "west"] as const;
 const roadIndex: Record<Road, number> = { north: 0, east: 1, south: 2, west: 3 };
 const indexRoad: Record<number, Road> = { 0: "north", 1: "east", 2: "south", 3: "west" };
 
+function roadToIdx(r: Road): number {
+  switch (r) {
+    case "north":
+      return 0;
+    case "east":
+      return 1;
+    case "south":
+      return 2;
+    case "west":
+      return 3;
+  }
+}
+
+function idxToRoad(i: number): Road {
+  const arr: Road[] = ["north", "east", "south", "west"];
+  return arr[i % 4]!;
+}
+
 function endRoadFromTurn(start: Road, turn: "right" | "straight" | "left"): Road {
-  const i = roadIndex[start];
+  const i = roadToIdx(start);
   const inbound = (i + 2) % 4;
 
   let outHeading: number;
@@ -85,7 +103,7 @@ function endRoadFromTurn(start: Road, turn: "right" | "straight" | "left"): Road
   else if (turn === "right") outHeading = (inbound + 1) % 4;
   else outHeading = (inbound + 3) % 4;
 
-  return indexRoad[outHeading]!;
+  return idxToRoad(outHeading);
 }
 
 function generateScenario(steps: number, pArrive: number, seed: number): SimulationInput {

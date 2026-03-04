@@ -7,7 +7,9 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run -ws build",
+    "build": "npm run build:packages && npm run build:apps",
+    "build:packages": "npm -w @tls/shared-types run build && npm -w @tls/sim-core run build",
+    "build:apps": "npm -w @tls/api run build && npm -w @tls/cli run build && npm -w @tls/web run build && npm -w @tls/tools run build",
     "test": "npm run -ws test",
     "dev:cli": "npm --workspace @tls/cli run dev",
     "lint": "eslint \"apps/**/*.{ts,tsx}\" \"packages/**/*.{ts,tsx}\"",
