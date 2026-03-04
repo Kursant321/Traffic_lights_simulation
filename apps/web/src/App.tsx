@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { IntersectionView } from "./IntersectionView";
 
 type Mode = "fixed" | "adaptive";
 
@@ -51,6 +52,7 @@ function isDiagnostics(x: unknown): x is Diagnostics {
   if (!("stats" in obj)) return false;
   if (typeof obj.stats !== "object" || obj.stats === null) return false;
   if (!("output" in obj)) return false;
+  if (!("trace" in obj)) return false;
   return true;
 }
 
@@ -65,6 +67,10 @@ export function App(): JSX.Element {
 
   const [rawResponse, setRawResponse] = useState<string>("");
 
+  // replay state
+  const [selectedStep, setSelectedStep] = useState<number>(0);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+
   const parsed = useMemo(() => {
     try {
       return JSON.parse(rawResponse) as unknown;
@@ -76,10 +82,30 @@ export function App(): JSX.Element {
   const diag = isDiagnostics(parsed) ? parsed : null;
   const out: SimOutput | null = diag ? diag.output : (parsed as SimOutput | null);
 
+  const maxStep = diag ? Math.max(0, diag.trace.length - 1) : 0;
+  const currentTrace = diag ? diag.trace[Math.min(selectedStep, maxStep)] : null;
+
+  useEffect(() => {
+    if (!isPlaying) return;
+    if (!diag || diag.trace.length === 0) return;
+
+    const t = setInterval(() => {
+      setSelectedStep((s) => {
+        const next = s + 1;
+        if (next > maxStep) return 0;
+        return next;
+      });
+    }, 700);
+
+    return () => clearInterval(t);
+  }, [isPlaying, diag, maxStep]);
+
   async function run(): Promise<void> {
     setError("");
     setLoading(true);
     setRawResponse("");
+    setIsPlaying(false);
+    setSelectedStep(0);
 
     let body: unknown;
     try {
@@ -126,7 +152,9 @@ export function App(): JSX.Element {
       <div className="header">
         <div>
           <h2 style={{ margin: 0 }}>Traffic Lights Simulation</h2>
-          <div className="badge">Web UI (Vite + React) → API (/simulate)</div>
+          <div className="badge">
+            Web UI → API (/simulate) • Output and diagnostics separated
+          </div>
         </div>
 
         <div className="row" style={{ margin: 0 }}>
@@ -183,12 +211,74 @@ export function App(): JSX.Element {
             <b>Output (required format)</b>
             <span className="small">{out ? "stepStatuses / leftVehicles" : "—"}</span>
           </div>
-
           <pre>
-            {out
-              ? JSON.stringify(out, null, 2)
-              : "Run the simulation to see output here."}
+            {out ? JSON.stringify(out, null, 2) : "Run the simulation to see output."}
           </pre>
+        </div>
+
+        <div className="card" style={{ gridColumn: "1 / -1" }}>
+          <div className="row">
+            <b>Replay</b>
+            <span className="small">Requires diagnostics</span>
+          </div>
+
+          {diag && currentTrace ? (
+            <>
+              <div className="row" style={{ marginBottom: 8 }}>
+                <button
+                  onClick={() => setIsPlaying((p) => !p)}
+                  disabled={!diag || diag.trace.length === 0}
+                >
+                  {isPlaying ? "Pause" : "Play"}
+                </button>
+
+                <span className="small">
+                  Step: {selectedStep} / {maxStep}
+                </span>
+
+                <input
+                  type="range"
+                  min={0}
+                  max={maxStep}
+                  value={selectedStep}
+                  onChange={(e) => setSelectedStep(Number(e.target.value))}
+                  style={{ flex: 1 }}
+                />
+              </div>
+
+              <div className="row" style={{ gap: 14, alignItems: "flex-start" }}>
+                <IntersectionView
+                  signal={currentTrace.signal}
+                  queueSizes={currentTrace.queueSizesBefore}
+                  width={520}
+                  height={300}
+                />
+
+                <div style={{ flex: 1, minWidth: 260 }}>
+                  <div className="kv">
+                    <div>stageKind</div>
+                    <div>{currentTrace.signal.stageKind}</div>
+                    <div>activePhase</div>
+                    <div>{currentTrace.signal.activePhase ?? "-"}</div>
+                    <div>nextPhase</div>
+                    <div>{currentTrace.signal.nextPhase ?? "-"}</div>
+                    <div>greenAgeSteps</div>
+                    <div>{currentTrace.signal.greenAgeSteps}</div>
+                    <div>leftVehicles</div>
+                    <div>
+                      <pre style={{ margin: 0 }}>
+                        {JSON.stringify(currentTrace.leftVehicles, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="small">
+              Enable diagnostics and run the simulation to use replay.
+            </div>
+          )}
         </div>
 
         <div className="card" style={{ gridColumn: "1 / -1" }}>
@@ -213,70 +303,7 @@ export function App(): JSX.Element {
               <div>{diag.stats.maxQueueTotal}</div>
             </div>
           ) : (
-            <div className="small">
-              Enable diagnostics to see stats and step-by-step trace.
-            </div>
-          )}
-        </div>
-
-        <div className="card" style={{ gridColumn: "1 / -1" }}>
-          <div className="row">
-            <b>Trace</b>
-            <span className="small">Step-by-step (requires diagnostics)</span>
-          </div>
-
-          {diag ? (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th style={{ width: 70 }}>Step</th>
-                  <th style={{ width: 220 }}>Signal</th>
-                  <th style={{ width: 220 }}>Left vehicles</th>
-                  <th>Queue before</th>
-                  <th>Queue after</th>
-                </tr>
-              </thead>
-              <tbody>
-                {diag.trace.map((t) => (
-                  <tr key={t.stepIndex}>
-                    <td>{t.stepIndex}</td>
-                    <td>
-                      <div>
-                        <b>{t.signal.stageKind}</b>
-                      </div>
-                      <div className="small">
-                        phase: {t.signal.activePhase ?? "-"}
-                        <br />
-                        next: {t.signal.nextPhase ?? "-"}
-                        <br />
-                        greenAge: {t.signal.greenAgeSteps}
-                        {t.signal.remainingSteps !== null ? (
-                          <>
-                            <br />
-                            remaining: {t.signal.remainingSteps}
-                          </>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td>
-                      {t.leftVehicles.length ? (
-                        <pre>{JSON.stringify(t.leftVehicles, null, 2)}</pre>
-                      ) : (
-                        <span className="small">[]</span>
-                      )}
-                    </td>
-                    <td>
-                      <pre>{JSON.stringify(t.queueSizesBefore, null, 2)}</pre>
-                    </td>
-                    <td>
-                      <pre>{JSON.stringify(t.queueSizesAfter, null, 2)}</pre>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="small">No trace available without diagnostics.</div>
+            <div className="small">Enable diagnostics to see stats and trace.</div>
           )}
         </div>
 

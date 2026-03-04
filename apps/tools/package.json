@@ -1,0 +1,15 @@
+{
+  "name": "@tls/tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bench": "tsx src/benchmark.ts",
+    "test": "vitest run --passWithNoTests",
+    "build": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@tls/shared-types": "0.1.0",
+    "@tls/sim-core": "0.1.0"
+  }
+}

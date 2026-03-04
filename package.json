@@ -16,7 +16,8 @@
     "dev:api": "npm --workspace @tls/api run dev",
     "dev:web": "npm --workspace @tls/web run dev",
     "sim": "tsx apps/cli/src/index.ts",
-    "sim:realistic": "tsx apps/cli/src/index.ts --yellowSteps 1 --allRedSteps 1"
+    "sim:realistic": "tsx apps/cli/src/index.ts --yellowSteps 1 --allRedSteps 1",
+    "bench": "npm --workspace @tls/tools run bench --"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

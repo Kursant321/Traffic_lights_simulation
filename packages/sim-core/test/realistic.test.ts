@@ -9,7 +9,7 @@ describe("realistic mode (yellow/all-red)", () => {
         { type: "addVehicle", vehicleId: "ns1", startRoad: "south", endRoad: "north" },
         { type: "step" }, // przepuszcza ns1 (GREEN)
         { type: "step" }, // nadal może być GREEN
-        { type: "step" }  // przełączenie fazy -> YELLOW -> brak przepuszczania
+        { type: "step" } // przełączenie fazy -> YELLOW -> brak przepuszczania
       ]
     };
 
