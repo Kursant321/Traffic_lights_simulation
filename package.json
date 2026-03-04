@@ -13,7 +13,8 @@
     "lint": "eslint \"apps/**/*.{ts,tsx}\" \"packages/**/*.{ts,tsx}\"",
     "format": "prettier -w .",
     "check": "npm run format && npm run lint && npm run build && npm run test",
-    "dev:api": "npm --workspace @tls/api run dev"
+    "dev:api": "npm --workspace @tls/api run dev",
+    "dev:web": "npm --workspace @tls/web run dev"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
