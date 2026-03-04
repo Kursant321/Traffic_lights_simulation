@@ -74,7 +74,6 @@ class Lcg {
 
 const roads: readonly Road[] = ["north", "east", "south", "west"] as const;
 
-
 function roadToIdx(r: Road): number {
   switch (r) {
     case "north":
