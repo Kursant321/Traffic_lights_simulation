@@ -12,7 +12,8 @@
     "dev:cli": "npm --workspace @tls/cli run dev",
     "lint": "eslint \"apps/**/*.{ts,tsx}\" \"packages/**/*.{ts,tsx}\"",
     "format": "prettier -w .",
-    "check": "npm run format && npm run lint && npm run build && npm run test"
+    "check": "npm run format && npm run lint && npm run build && npm run test",
+    "dev:api": "npm --workspace @tls/api run dev"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
