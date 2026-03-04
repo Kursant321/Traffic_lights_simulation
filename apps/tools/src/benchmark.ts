@@ -73,8 +73,7 @@ class Lcg {
 }
 
 const roads: readonly Road[] = ["north", "east", "south", "west"] as const;
-const roadIndex: Record<Road, number> = { north: 0, east: 1, south: 2, west: 3 };
-const indexRoad: Record<number, Road> = { 0: "north", 1: "east", 2: "south", 3: "west" };
+
 
 function roadToIdx(r: Road): number {
   switch (r) {
