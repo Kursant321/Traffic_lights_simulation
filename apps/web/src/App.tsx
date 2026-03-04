@@ -48,12 +48,17 @@ const SAMPLE = `{
 function isDiagnostics(x: unknown): x is Diagnostics {
   if (typeof x !== "object" || x === null) return false;
   const obj = x as Record<string, unknown>;
-  return "stats" in obj && typeof obj.stats === "object" && obj.stats !== null;
+  if (!("stats" in obj)) return false;
+  if (typeof obj.stats !== "object" || obj.stats === null) return false;
+  if (!("output" in obj)) return false;
+  return true;
 }
 
 export function App(): JSX.Element {
   const [mode, setMode] = useState<Mode>("fixed");
   const [diagnostics, setDiagnostics] = useState<boolean>(true);
+  const [realistic, setRealistic] = useState<boolean>(false);
+
   const [input, setInput] = useState<string>(SAMPLE);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
@@ -67,6 +72,9 @@ export function App(): JSX.Element {
       return null;
     }
   }, [rawResponse]);
+
+  const diag = isDiagnostics(parsed) ? parsed : null;
+  const out: SimOutput | null = diag ? diag.output : (parsed as SimOutput | null);
 
   async function run(): Promise<void> {
     setError("");
@@ -85,6 +93,11 @@ export function App(): JSX.Element {
     const params = new URLSearchParams();
     params.set("mode", mode);
     if (diagnostics) params.set("diagnostics", "1");
+
+    if (realistic) {
+      params.set("yellowSteps", "1");
+      params.set("allRedSteps", "1");
+    }
 
     try {
       const res = await fetch(`/simulate?${params.toString()}`, {
@@ -107,9 +120,6 @@ export function App(): JSX.Element {
       setLoading(false);
     }
   }
-
-  const diag = isDiagnostics(parsed) ? parsed : null;
-  const out = diag ? diag.output : (parsed as SimOutput | null);
 
   return (
     <div className="container">
@@ -137,6 +147,15 @@ export function App(): JSX.Element {
             diagnostics
           </label>
 
+          <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <input
+              type="checkbox"
+              checked={realistic}
+              onChange={(e) => setRealistic(e.target.checked)}
+            />
+            realistic (yellow + all-red)
+          </label>
+
           <button onClick={run} disabled={loading}>
             {loading ? "Running..." : "Run"}
           </button>
@@ -161,13 +180,15 @@ export function App(): JSX.Element {
 
         <div className="card">
           <div className="row">
-            <b>Response</b>
-            <span className="small">
-              {diag ? "diagnostics + output" : out ? "output" : "—"}
-            </span>
+            <b>Output (required format)</b>
+            <span className="small">{out ? "stepStatuses / leftVehicles" : "—"}</span>
           </div>
 
-          <pre>{rawResponse || "Run the simulation to see output here."}</pre>
+          <pre>
+            {out
+              ? JSON.stringify(out, null, 2)
+              : "Run the simulation to see output here."}
+          </pre>
         </div>
 
         <div className="card" style={{ gridColumn: "1 / -1" }}>
@@ -192,7 +213,9 @@ export function App(): JSX.Element {
               <div>{diag.stats.maxQueueTotal}</div>
             </div>
           ) : (
-            <div className="small">Enable diagnostics to see stats and step-by-step trace.</div>
+            <div className="small">
+              Enable diagnostics to see stats and step-by-step trace.
+            </div>
           )}
         </div>
 
@@ -227,6 +250,12 @@ export function App(): JSX.Element {
                         next: {t.signal.nextPhase ?? "-"}
                         <br />
                         greenAge: {t.signal.greenAgeSteps}
+                        {t.signal.remainingSteps !== null ? (
+                          <>
+                            <br />
+                            remaining: {t.signal.remainingSteps}
+                          </>
+                        ) : null}
                       </div>
                     </td>
                     <td>
@@ -249,6 +278,14 @@ export function App(): JSX.Element {
           ) : (
             <div className="small">No trace available without diagnostics.</div>
           )}
+        </div>
+
+        <div className="card" style={{ gridColumn: "1 / -1" }}>
+          <div className="row">
+            <b>Raw response</b>
+            <span className="small">Full JSON returned by API</span>
+          </div>
+          <pre>{rawResponse || "—"}</pre>
         </div>
       </div>
     </div>

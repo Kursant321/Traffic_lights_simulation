@@ -35,6 +35,13 @@ function parseMode(v: string | undefined): ControllerMode | undefined {
   return undefined;
 }
 
+function parseNonNegativeInt(v: string | undefined): number | undefined {
+  if (v === undefined) return undefined;
+  const n = Number(v);
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) return undefined;
+  return n;
+}
+
 const app = Fastify({ logger: true });
 await app.register(cors, { origin: true });
 
@@ -43,6 +50,9 @@ app.get("/health", async () => ({ ok: true }));
 app.post("/simulate", async (req, reply) => {
   const diagnostics = parseBool(getQueryParam(req, "diagnostics"));
   const mode = parseMode(getQueryParam(req, "mode"));
+
+  const yellowSteps = parseNonNegativeInt(getQueryParam(req, "yellowSteps"));
+  const allRedSteps = parseNonNegativeInt(getQueryParam(req, "allRedSteps"));
 
   const parsed = SimulationInputSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -54,6 +64,9 @@ app.post("/simulate", async (req, reply) => {
 
   const cfg: Partial<SimulationConfig> = {};
   if (mode) cfg.mode = mode;
+
+  if (yellowSteps !== undefined) cfg.yellowSteps = yellowSteps;
+  if (allRedSteps !== undefined) cfg.allRedSteps = allRedSteps;
 
   if (diagnostics) {
     return reply.send(runSimulationWithDiagnostics(parsed.data, cfg));
